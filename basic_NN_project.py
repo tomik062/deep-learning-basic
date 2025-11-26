@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+torch.manual_seed(42)
 #try to use my nvidea 4050
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #loading and pre-processing diamond data
@@ -70,3 +71,38 @@ class DiamondModel(nn.Module):
         x = torch.cat(embeddings, 1)
         x = torch.cat([x, x_numerical], 1)
         return self.layers(x)
+
+
+model = DiamondModel(
+    embedding_sizes,
+    len(numerical_features),
+    [128,64,32]
+).to(device)
+criterion = nn.MSELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
+
+#training
+epochs = 3000
+print("Starting training...")
+
+for i in range(epochs):
+    model.train()
+    y_pred = model.forward(categorical_train, numerical_train)
+    loss = criterion(y_pred, Y_train_tensor)
+
+    #back propagation
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+#testing
+model.eval()
+with torch.no_grad():
+    # Convert Test data to Tensors (on GPU)
+    categorical_test = torch.tensor(X_test[categorical_features].values, dtype=torch.long).to(device)
+    numerical_test = torch.tensor(X_test[numerical_features].values, dtype=torch.float).to(device)
+    Y_test_tensor = torch.tensor(Y_test.values, dtype=torch.float).reshape(-1, 1).to(device)
+
+    test_pred = model(categorical_test, numerical_test)
+    test_loss = criterion(test_pred, Y_test_tensor)
+    print(f"FINAL TEST RMSE: {torch.sqrt(test_loss).item():.2f}")
